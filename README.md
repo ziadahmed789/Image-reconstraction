@@ -1,20 +1,32 @@
 # 🧠 Face Image Inpainting using U-Net
 
-A deep learning project for reconstructing missing regions in facial images using a **U-Net architecture** trained with **PyTorch Lightning** on the **CelebA** dataset. The model learns to fill masked patches while preserving facial structure and visual consistency.
+A deep learning project for reconstructing missing regions in facial images using a **U-Net architecture** trained with **PyTorch Lightning** on the **CelebA dataset**. The model learns to fill randomly masked patches while preserving facial structure, visual consistency, and perceptual realism.
 
-An interactive **Streamlit demo** is included so you can test the model on your own images.
+An interactive **Streamlit demo** is included so you can test the model on your own face images.
 
 ---
 
 ## 📸 Sample Output
 
-> Epoch 1 — the model already begins predicting plausible content in the masked region.
+> Results after 95 epochs of training — Masked Input | Predicted Reconstruction | Ground Truth
 
-![Epoch 1 Output](results/epoch_095.png)
+![Epoch 95 Output](results/epoch_095.png)
 
-| Masked Input | Predicted | Ground Truth |
-|:---:|:---:|:---:|
-| Image with gray patch | Model reconstruction | Original image |
+> Test results across 8 unseen images:
+
+![Test Results](test_outputs/test_results.png)
+
+---
+
+## 📊 Test Results
+
+| Metric | Score |
+|---|---|
+| Average L1 Loss | 0.0066 |
+| Average PSNR | 28.18 dB |
+| Average Accuracy | 99.34% |
+| Best Accuracy | 99.77% |
+| Worst Accuracy | 98.85% |
 
 ---
 
@@ -23,16 +35,24 @@ An interactive **Streamlit demo** is included so you can test the model on your 
 ```
 Image-reconstraction/
 │
-├── src/                          # Model architecture and training code
+├── src/
+│   ├── main.py                 # U-Net architecture, dataset, training loop
+│   ├── app.py                  # Streamlit inference demo
+│   ├── test.py                 # Evaluation script
+│   ├── mask_generator.py       # Mask generation utilities
+│   └── preprocess_celeba.py    # CelebA preprocessing script
+│
 ├── data/
-│   └── processed/                # Preprocessed dataset splits
-├── outputs/                      # Saved predictions per epoch
-├── lightning_logs/               # PyTorch Lightning training logs
-├── archive/                      # Older experiments
-├── app.py                        # Streamlit inference app
-├── unet.ckpt                     # Trained model checkpoint
+│   └── processed/              # Preprocessed dataset splits
+│       └── train/
+│
+├── results/                    # Sample outputs saved every 5 epochs
+├── test_outputs/               # Test evaluation results
+├── outputs/                    # Training visualization outputs
+├── checkpoints/                # Saved model checkpoints
+├── lightning_logs/             # PyTorch Lightning training logs
+├── unet.ckpt                   # Trained model checkpoint
 ├── requirements.txt
-├── .gitignore
 └── README.md
 ```
 
@@ -40,17 +60,17 @@ Image-reconstraction/
 
 ## 📦 Dataset
 
-This project uses the **[CelebA](http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html)** dataset — a large-scale face attributes dataset with over 200,000 celebrity images.
+This project uses the [CelebA dataset](https://mmlab.ie.cuhk.edu.hk/projects/CelebA.html) — a large-scale face attributes dataset with over 200,000 celebrity images.
 
-All images were resized to **64 × 64** pixels and split using the official CelebA partition file.
+All images are resized to **128×128 pixels** during training.
 
-| Split | Images |
-|-------|-------:|
-| Training | 162,770 |
-| Validation | 19,867 |
-| Test | 19,962 |
+| Split | Images Used |
+|---|---|
+| Training | 9,000 |
+| Validation | 1,000 |
+| **Total** | **10,000** |
 
-> ⚠️ **Note:** Dataset files are **not included** in this repository due to their size. Download CelebA locally and update the dataset paths before running preprocessing.
+> ⚠️ Dataset files are **not included** in this repository due to size. Download CelebA from the [official source](https://mmlab.ie.cuhk.edu.hk/projects/CelebA.html), place it in `data/`, and run the preprocessing script before training.
 
 ---
 
@@ -58,26 +78,63 @@ All images were resized to **64 × 64** pixels and split using the official Cele
 
 The preprocessing pipeline handles:
 
-- Loading the CelebA dataset from disk
-- Resizing all images to **64 × 64**
+- Loading raw CelebA images from disk
+- Resizing all images to **128×128**
 - Verifying image integrity (skipping corrupted files)
-- Splitting into train / validation / test sets using the official partition file
+- Saving processed images to `data/processed/train/`
+
+Run it with:
+
+```bash
+python src/preprocess_celeba.py
+```
 
 ---
 
 ## 🏗️ Model Architecture
 
-The model is based on the **U-Net** architecture:
+The model is based on the **U-Net** architecture — a symmetric encoder-decoder network with skip connections designed for image-to-image tasks.
 
-- **Encoder** — extracts deep feature maps from the masked input
-- **Skip connections** — preserves spatial information across encoder and decoder
-- **Decoder** — upsamples features to reconstruct the full image
+```
+Input (Masked Face 128×128)
+        │
+   ┌────▼────┐
+   │ Encoder  │  Conv → BN → ReLU blocks at 64, 128, 256 channels
+   │          │  MaxPool downsampling at each stage
+   └────┬────┘
+        │
+   ┌────▼────┐
+   │Bottleneck│  512-channel feature representation
+   └────┬────┘
+        │
+   ┌────▼────┐
+   │ Decoder  │  ConvTranspose upsampling at 256, 128, 64 channels
+   │          │  Skip connections concatenated at each stage
+   └────┬────┘
+        │
+   Output (Reconstructed Face 128×128)
+```
 
-A random rectangular mask is applied during training. Loss is computed pixel-wise between the predicted output and the original ground truth image.
+**Loss Function:**
+- **L1 Loss** — pixel-wise reconstruction accuracy
+- **Perceptual Loss** (VGG16 features, λ=0.1) — ensures visual and semantic realism
 
 ---
-test reslut:
-![TestReslut](test_outputs/test_results.png)
+
+## 🏋️ Training Configuration
+
+| Parameter | Value |
+|---|---|
+| Image Size | 128×128 |
+| Batch Size | 32 |
+| Epochs | 100 |
+| Optimizer | Adam |
+| Learning Rate | 1e-4 |
+| LR Scheduler | StepLR (×0.5 every 30 epochs) |
+| Precision | bf16-mixed |
+| Accelerator | Auto (MPS / CUDA / CPU) |
+| Mask Size | 25% of image (random location) |
+
 ---
 
 ## 🚀 Getting Started
@@ -95,17 +152,29 @@ cd Image-reconstraction
 pip install -r requirements.txt
 ```
 
+> Requires **Python 3.8+**
+
 ### 3. Prepare the dataset
 
-Download CelebA, place it in the `data/` directory, then run the preprocessing script.
+Download CelebA, place it in `data/`, then run:
+
+```bash
+python src/preprocess_celeba.py
+```
 
 ### 4. Train the model
 
 ```bash
-python src/train.py
+python src/main.py
 ```
 
-Training logs are saved automatically to `lightning_logs/`.
+Training logs are saved automatically to `lightning_logs/`. Visual outputs are saved to `outputs/` every 5 epochs.
+
+### 5. Evaluate the model
+
+```bash
+python src/test.py
+```
 
 ---
 
@@ -114,10 +183,13 @@ Training logs are saved automatically to `lightning_logs/`.
 Run the interactive inpainting app locally:
 
 ```bash
+cd src
 streamlit run app.py
 ```
 
-Upload any face image → the app applies a random mask and shows the model's reconstruction side by side.
+> ⚠️ **Note:** The app must be run from inside the `src/` directory due to the local import of `main.py`. It also expects the checkpoint at `checkpoints/best-epoch=099-val_loss=0.0167.ckpt`. If you are using a different checkpoint, update the path in `app.py` accordingly.
+
+Upload any face image → the app applies a fixed center mask and displays the **Masked Input**, **Model Reconstruction**, and **Original** side by side.
 
 ---
 
@@ -127,13 +199,24 @@ Upload any face image → the app applies a random mask and shows the model's re
 - [PyTorch Lightning](https://lightning.ai/)
 - [torchvision](https://pytorch.org/vision/)
 - [Streamlit](https://streamlit.io/)
-- [CelebA Dataset](http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html)
+- [CelebA Dataset](https://mmlab.ie.cuhk.edu.hk/projects/CelebA.html)
+
+---
+
+## 📄 Citation
+
+If you use this project in your research, please cite it as:
+
+```
+Z. Ahmed et al., "Face Image Inpainting using U-Net," GitHub, 2025.
+Available: https://github.com/ziadahmed789/Image-reconstraction
+```
 
 ---
 
 ## 📬 Contact
 
-**Ziad Ahmed**  
+**Ziad Ahmed**
 GitHub: [@ziadahmed789](https://github.com/ziadahmed789)
 
 ---
