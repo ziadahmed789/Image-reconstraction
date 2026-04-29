@@ -10,7 +10,7 @@ An interactive **Streamlit demo** is included so you can test the model on your 
 
 > Epoch 1 — the model already begins predicting plausible content in the masked region.
 
-![Epoch 1 Output](outputs/epoch_001.png)
+![Epoch 1 Output](results/epoch_095.png)
 
 | Masked Input | Predicted | Ground Truth |
 |:---:|:---:|:---:|
