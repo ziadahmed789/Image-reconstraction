@@ -76,6 +76,9 @@ The model is based on the **U-Net** architecture:
 A random rectangular mask is applied during training. Loss is computed pixel-wise between the predicted output and the original ground truth image.
 
 ---
+test reslut:
+![TestReslut](test_outputs/test_results.png)
+---
 
 ## 🚀 Getting Started
 
