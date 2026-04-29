@@ -1,0 +1,23 @@
+# macOS
+.DS_Store
+
+# dataset
+archive/
+data/raw/
+data/processed/
+data/masks/
+*.zip
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.mplconfig/
+
+# outputs
+checkpoints/
+runs/
+lightning_logs/
+outputs/
+*.pth
+*.pt
